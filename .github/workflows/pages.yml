@@ -1,0 +1,87 @@
+name: Deploy Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "README.md"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build site
+        run: |
+          mkdir -p _site
+
+          # Convert README to index
+          cp README.md _site/index.md
+
+          # Copy docs
+          cp -r docs/ _site/docs/
+
+          # Copy examples
+          cp -r examples/ _site/examples/ 2>/dev/null || true
+
+          # Create Jekyll config
+          cat > _site/_config.yml << 'YAML'
+          title: Surrogate
+          description: High-performance cross-platform proxy kernel written in Rust
+          theme: jekyll-theme-cayman
+          markdown: kramdown
+          kramdown:
+            input: GFM
+          YAML
+
+          # Create user guide page
+          cat > _site/guide.md << 'MD'
+          ---
+          layout: default
+          title: User Guide
+          ---
+
+          MD
+          cat docs/guide/user-guide.md >> _site/guide.md
+
+          # Create configuration page
+          cat > _site/configuration.md << 'MD'
+          ---
+          layout: default
+          title: Configuration
+          ---
+
+          MD
+          cat docs/guide/configuration.md >> _site/configuration.md
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

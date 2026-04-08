@@ -1,0 +1,12 @@
+[package]
+name = "surrogate-control"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Control plane: config store, rule compiler, plugin registry, import engine, test workbench"
+
+[dependencies]
+surrogate-contract = { path = "../surrogate-contract" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

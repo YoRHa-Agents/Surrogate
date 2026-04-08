@@ -1,0 +1,47 @@
+# Surrogate proxy — basic configuration example
+#
+# Start the proxy with:
+#   surrogate-app serve examples/basic.toml
+#
+# Test with:
+#   curl -x http://127.0.0.1:41080 https://example.com
+#   curl --socks5 127.0.0.1:41080 https://example.com
+
+listen = "127.0.0.1:41080"
+default_outbound = "direct"
+
+# --- Outbound transports ---
+
+[[outbounds]]
+id = "direct"
+type = "direct"
+
+[[outbounds]]
+id = "reject"
+type = "reject"
+
+# --- Routing rules (evaluated in order, first match wins) ---
+
+# Block known ad domains
+[[rules]]
+id = "block-ads"
+host_suffix = "ads.example.com"
+outbound = "reject"
+
+# Block tracking pixels
+[[rules]]
+id = "block-tracking"
+host_suffix = "tracker.example.net"
+outbound = "reject"
+
+# Direct local traffic
+[[rules]]
+id = "allow-local"
+host_equals = "localhost"
+outbound = "direct"
+
+# Direct traffic on port 8080
+[[rules]]
+id = "dev-server"
+port = 8080
+outbound = "direct"
