@@ -10,3 +10,6 @@ anyhow.workspace = true
 surrogate-contract = { path = "../surrogate-contract" }
 surrogate-kernel = { path = "../surrogate-kernel" }
 tokio.workspace = true
+
+[dev-dependencies]
+toml.workspace = true
