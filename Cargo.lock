@@ -424,6 +424,7 @@ dependencies = [
  "surrogate-contract",
  "surrogate-kernel",
  "tokio",
+ "toml",
 ]
 
 [[package]]
