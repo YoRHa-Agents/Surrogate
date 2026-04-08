@@ -1,0 +1,13 @@
+[package]
+name = "surrogate-bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Platform bridges: macOS NETransparentProxy, Linux explicit proxy / TPROXY"
+
+[dependencies]
+surrogate-contract = { path = "../surrogate-contract" }
+tokio.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
