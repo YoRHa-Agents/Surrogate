@@ -1,0 +1,44 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editors and IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs and temporary files
+*.log
+*.tmp
+.cache/
+tmp/
+temp/
+
+# Environment and local overrides
+.env
+.env.*
+!.env.example
+*.local
+
+# Rust build output
+target/
+
+# Common dependency and build outputs
+node_modules/
+dist/
+build/
+coverage/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+.cursor
+.claude
+
+# local
+.local/
