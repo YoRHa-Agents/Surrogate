@@ -83,7 +83,11 @@ mod platform {
     /// # Safety
     /// `view` must be a valid, non-null pointer to an NSControl that responds to `setFont:`.
     pub unsafe fn set_font(view: *mut Object, name: &str, size: f64) {
-        let ns_name = cocoanut::native::string::make_ns_string(name);
+        let c_name = std::ffi::CString::new(name).unwrap_or_default();
+        let ns_name: *mut Object = objc::msg_send![
+            objc::class!(NSString),
+            stringWithUTF8String: c_name.as_ptr()
+        ];
         let font: *mut Object =
             objc::msg_send![objc::class!(NSFont), fontWithName: ns_name size: size];
         if !font.is_null() {
@@ -107,8 +111,11 @@ mod platform {
         ];
         let _: () = objc::msg_send![window, setBackgroundColor: bg_color];
 
-        let appearance_name =
-            cocoanut::native::string::make_ns_string("NSAppearanceNameDarkAqua");
+        let c_str = std::ffi::CString::new("NSAppearanceNameDarkAqua").unwrap_or_default();
+        let appearance_name: *mut Object = objc::msg_send![
+            objc::class!(NSString),
+            stringWithUTF8String: c_str.as_ptr()
+        ];
         let appearance: *mut Object =
             objc::msg_send![objc::class!(NSAppearance), appearanceNamed: appearance_name];
         if !appearance.is_null() {

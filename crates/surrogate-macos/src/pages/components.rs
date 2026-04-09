@@ -1,11 +1,11 @@
 use crate::dispatcher::AppController;
-use crate::theme::{yorha_group_box, yorha_section_header, BODY, CAPTION, TITLE_LG};
+use crate::theme::{yorha_group_box, BODY, CAPTION, TITLE_LG};
 use cocoanut::prelude::*;
 
 pub fn build(controller: &AppController) -> View {
     let running = controller.is_running();
 
-    let active = if running { "ACTIVE" } else { "INACTIVE" };
+    let _active = if running { "ACTIVE" } else { "INACTIVE" };
     let standby = if running { "ACTIVE" } else { "STANDBY" };
 
     let mut page = View::vstack()

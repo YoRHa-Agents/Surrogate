@@ -161,7 +161,7 @@ fn handle_menu_event(event: &MenuEvent, controller: &AppController) {
             controller.set_ui_mode(crate::dispatcher::UiMode::Expert);
         }
         "open_window" => {
-            activate_app_window();
+            crate::window::show_main_window();
         }
         "quick_test_panel" => {
             eprintln!("[surrogate] tray: Quick Test Panel selected (placeholder — cannot switch window tab from tray)");
@@ -172,23 +172,6 @@ fn handle_menu_event(event: &MenuEvent, controller: &AppController) {
         unknown => {
             eprintln!("[surrogate] unhandled menu event: {unknown}");
         }
-    }
-}
-
-/// Bring the Surrogate main window to front by activating the process.
-/// Uses osascript because the tray event thread cannot safely call AppKit
-/// APIs that belong to the main thread's run loop.
-fn activate_app_window() {
-    if let Err(e) = std::process::Command::new("osascript")
-        .args([
-            "-e",
-            "tell application \"System Events\" to set frontmost of process \"Surrogate\" to true",
-        ])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-    {
-        eprintln!("[surrogate] failed to activate window: {e}");
     }
 }
 

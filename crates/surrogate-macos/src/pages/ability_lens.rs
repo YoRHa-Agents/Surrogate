@@ -1,6 +1,6 @@
 use crate::dispatcher::{AppController, UiMode};
 use crate::theme::{
-    yorha_group_box, yorha_section_header, BODY, CAPTION, MICRO, TITLE_LG, TITLE_SM,
+    yorha_group_box, yorha_section_header, BODY, CAPTION, MICRO, TITLE_LG,
 };
 use cocoanut::prelude::*;
 use surrogate_control::ability_lens::{Ability, AbilityLens, AbilitySnapshot, AbilityStatus};

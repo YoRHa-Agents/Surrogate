@@ -1,5 +1,5 @@
 use crate::dispatcher::AppController;
-use crate::theme::{yorha_group_box, yorha_section_header, BODY, CAPTION, MICRO, TITLE_LG};
+use crate::theme::{yorha_group_box, BODY, CAPTION, TITLE_LG};
 use cocoanut::prelude::*;
 
 struct PluginSpec {

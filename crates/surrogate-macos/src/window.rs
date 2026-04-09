@@ -1,7 +1,63 @@
 use crate::dispatcher::{view_tags, AppController, UiMode};
-use crate::navigation::{NavigationState, Page, TaskGroup};
+use crate::navigation::{NavigationState, Page};
 use crate::theme;
 use cocoanut::prelude::*;
+
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// Stores the NSWindow pointer so the window can be re-shown after close.
+/// Uses AtomicUsize because raw pointers are not Sync.
+static MAIN_WINDOW_PTR: AtomicUsize = AtomicUsize::new(0);
+
+/// Called from a setup thread after the window is created.
+/// Captures the NSWindow pointer and prevents it from being deallocated on close.
+pub fn configure_main_window() {
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    unsafe {
+        let ns_app: *mut objc::runtime::Object =
+            objc::msg_send![objc::class!(NSApplication), sharedApplication];
+        let windows: *mut objc::runtime::Object = objc::msg_send![ns_app, windows];
+        let count: usize = objc::msg_send![windows, count];
+        if count > 0 {
+            let win: *mut objc::runtime::Object =
+                objc::msg_send![windows, objectAtIndex: 0usize];
+            if !win.is_null() {
+                let _: () = objc::msg_send![win, setReleasedWhenClosed: false];
+                MAIN_WINDOW_PTR.store(win as usize, Ordering::Release);
+            }
+        }
+    }
+}
+
+/// Re-show the main window (called from tray "Open Main Window" handler).
+pub fn show_main_window() {
+    let ptr = MAIN_WINDOW_PTR.load(Ordering::Acquire);
+    if ptr == 0 {
+        if let Err(e) = std::process::Command::new("osascript")
+            .args([
+                "-e",
+                "tell application \"System Events\" to set frontmost of process \"Surrogate\" to true",
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+        {
+            eprintln!("[surrogate] fallback window activate failed: {e}");
+        }
+        return;
+    }
+
+    unsafe {
+        let win = ptr as *mut objc::runtime::Object;
+        let _: () = objc::msg_send![
+            win,
+            makeKeyAndOrderFront: std::ptr::null::<objc::runtime::Object>()
+        ];
+        let ns_app: *mut objc::runtime::Object =
+            objc::msg_send![objc::class!(NSApplication), sharedApplication];
+        let _: () = objc::msg_send![ns_app, activateIgnoringOtherApps: true];
+    }
+}
 
 pub fn run_app(controller: AppController) {
     let snap = controller.snapshot();
@@ -25,9 +81,30 @@ pub fn run_app(controller: AppController) {
     app("Surrogate")
         .size(1200.0, 800.0)
         .on_close_fn(|| {
-            // Hide-on-close: the tray keeps the process alive.
-            // cocoanut's default on_close does not terminate;
-            // the tray quit handler calls cleanup_and_exit + process::exit.
+            let ptr = MAIN_WINDOW_PTR.load(Ordering::Acquire);
+            if ptr != 0 {
+                unsafe {
+                    let win = ptr as *mut objc::runtime::Object;
+                    let _: () = objc::msg_send![
+                        win,
+                        orderOut: std::ptr::null::<objc::runtime::Object>()
+                    ];
+                }
+            } else {
+                unsafe {
+                    let ns_app: *mut objc::runtime::Object =
+                        objc::msg_send![objc::class!(NSApplication), sharedApplication];
+                    let win: *mut objc::runtime::Object = objc::msg_send![ns_app, keyWindow];
+                    if !win.is_null() {
+                        let _: () = objc::msg_send![win, setReleasedWhenClosed: false];
+                        MAIN_WINDOW_PTR.store(win as usize, Ordering::Release);
+                        let _: () = objc::msg_send![
+                            win,
+                            orderOut: std::ptr::null::<objc::runtime::Object>()
+                        ];
+                    }
+                }
+            }
         })
         .build()
         .root(main_layout)

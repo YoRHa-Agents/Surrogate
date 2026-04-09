@@ -80,6 +80,11 @@ pub fn run() {
     // _tray_icon must be held for the lifetime of the app — dropping it
     // removes the icon from the menu bar.
     let _tray_icon = tray::setup_tray(controller_for_tray);
+
+    std::thread::spawn(|| {
+        window::configure_main_window();
+    });
+
     window::run_app(controller_for_window);
 }
 

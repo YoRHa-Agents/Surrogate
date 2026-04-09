@@ -22,3 +22,4 @@ anyhow = { workspace = true }
 cocoanut = "0.2"
 tray-icon = "0.22"
 png = "0.18"
+objc = "0.2"
