@@ -40,5 +40,10 @@ venv/
 .cursor
 .claude
 
+# macOS .app bundles and release archives
+Surrogate.app/
+Surrogate-macOS-*.zip
+
 # local
 .local/
+doc_auto

@@ -6,8 +6,6 @@ license.workspace = true
 description = "Data plane: proxy kernel with HTTP CONNECT, SOCKS5, streaming, and protocol modules"
 
 [dependencies]
-httparse.workspace = true
-rustls.workspace = true
 surrogate-contract = { path = "../surrogate-contract" }
 thiserror.workspace = true
 tokio.workspace = true

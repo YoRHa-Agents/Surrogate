@@ -18,6 +18,8 @@ use tokio::task::JoinHandle;
 
 const CONNECT_OK_RESPONSE: &[u8] = b"HTTP/1.1 200 Connection Established\r\n\r\n";
 const CONNECT_REJECT_RESPONSE: &[u8] = b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n";
+const METHOD_NOT_ALLOWED_RESPONSE: &[u8] = b"HTTP/1.1 405 Method Not Allowed\r\nAllow: CONNECT\r\nContent-Length: 0\r\n\r\n";
+const BAD_REQUEST_RESPONSE: &[u8] = b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
 const MAX_REQUEST_SIZE: usize = 8192;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -313,7 +315,20 @@ async fn handle_client_inner(
     state: &KernelState,
     session_id: u64,
 ) -> Result<(), KernelError> {
-    let request = read_connect_request(client).await?;
+    let request = match read_connect_request(client).await {
+        Ok(req) => req,
+        Err(e @ KernelError::UnsupportedMethod(_)) => {
+            let _ = client.write_all(METHOD_NOT_ALLOWED_RESPONSE).await;
+            return Err(e);
+        }
+        Err(KernelError::ClientClosed) => {
+            return Err(KernelError::ClientClosed);
+        }
+        Err(e) => {
+            let _ = client.write_all(BAD_REQUEST_RESPONSE).await;
+            return Err(e);
+        }
+    };
     state.observability.emit(Event::session_started(
         session_id,
         &request.host,

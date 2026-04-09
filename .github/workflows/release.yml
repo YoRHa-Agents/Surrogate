@@ -18,8 +18,8 @@ env:
   BINARY_NAME: surrogate-app
 
 jobs:
-  build:
-    name: Build (${{ matrix.target }})
+  build-linux:
+    name: Build Linux (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -30,9 +30,6 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             cross: true
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            macos_app: true
 
     steps:
       - uses: actions/checkout@v4
@@ -58,7 +55,6 @@ jobs:
         run: cross build --release --target ${{ matrix.target }} -p surrogate-app
 
       - name: Package Linux tarball
-        if: "!matrix.macos_app"
         shell: bash
         run: |
           ARCHIVE="${BINARY_NAME}-${{ matrix.target }}.tar.gz"
@@ -67,64 +63,63 @@ jobs:
           cd ../../..
           echo "ARCHIVE=${ARCHIVE}" >> $GITHUB_ENV
 
-      - name: Package macOS .app bundle
-        if: matrix.macos_app
-        shell: bash
-        run: |
-          APP_NAME="Surrogate"
-          APP_DIR="${APP_NAME}.app/Contents"
-          VERSION="${GITHUB_REF_NAME:-0.1.0}"
-          VERSION="${VERSION#v}"
-
-          mkdir -p "${APP_DIR}/MacOS"
-          mkdir -p "${APP_DIR}/Resources"
-
-          cp "target/${{ matrix.target }}/release/${BINARY_NAME}" "${APP_DIR}/MacOS/Surrogate"
-
-          cat > "${APP_DIR}/Info.plist" << PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleName</key>
-            <string>${APP_NAME}</string>
-            <key>CFBundleDisplayName</key>
-            <string>${APP_NAME}</string>
-            <key>CFBundleIdentifier</key>
-            <string>com.yorha-agents.surrogate</string>
-            <key>CFBundleVersion</key>
-            <string>${VERSION}</string>
-            <key>CFBundleShortVersionString</key>
-            <string>${VERSION}</string>
-            <key>CFBundleExecutable</key>
-            <string>Surrogate</string>
-            <key>CFBundlePackageType</key>
-            <string>APPL</string>
-            <key>LSMinimumSystemVersion</key>
-            <string>11.0</string>
-            <key>LSApplicationCategoryType</key>
-            <string>public.app-category.utilities</string>
-            <key>NSHighResolutionCapable</key>
-            <true/>
-            <key>LSUIElement</key>
-            <true/>
-          </dict>
-          </plist>
-          PLIST
-
-          ARCHIVE="${APP_NAME}-macOS-aarch64.zip"
-          zip -r "${ARCHIVE}" "${APP_NAME}.app"
-          echo "ARCHIVE=${ARCHIVE}" >> $GITHUB_ENV
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
           path: ${{ env.ARCHIVE }}
 
+  build-macos:
+    name: Build macOS App (aarch64)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: aarch64-apple-darwin
+
+      - name: Build CLI binary
+        run: cargo build --release --target aarch64-apple-darwin -p surrogate-app
+
+      - name: Package CLI tarball
+        shell: bash
+        run: |
+          ARCHIVE="${BINARY_NAME}-aarch64-apple-darwin.tar.gz"
+          cd target/aarch64-apple-darwin/release
+          tar czf "../../../${ARCHIVE}" "${BINARY_NAME}"
+          cd ../../..
+          echo "CLI_ARCHIVE=${ARCHIVE}" >> $GITHUB_ENV
+
+      - name: Build and package macOS .app bundle
+        shell: bash
+        run: |
+          chmod +x scripts/package-macos.sh
+          ./scripts/package-macos.sh release --target aarch64-apple-darwin
+          if [ -d "Surrogate.app" ]; then
+            zip -r "Surrogate-macOS-aarch64.zip" "Surrogate.app"
+          fi
+
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aarch64-apple-darwin-cli
+          path: ${{ env.CLI_ARCHIVE }}
+
+      - name: Upload macOS ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: aarch64-apple-darwin-zip
+          path: Surrogate-macOS-aarch64.zip
+          if-no-files-found: ignore
+
   release:
     name: Create Release
-    needs: build
+    needs: [build-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -139,6 +134,7 @@ jobs:
           mkdir -p release-assets
           find artifacts -name '*.tar.gz' -exec cp {} release-assets/ \;
           find artifacts -name '*.zip' -exec cp {} release-assets/ \;
+          find artifacts -name '*.dmg' -exec cp {} release-assets/ \;
           ls -la release-assets/
 
       - name: Generate checksums
@@ -149,5 +145,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: |
-            release-assets/*
+          files: release-assets/*

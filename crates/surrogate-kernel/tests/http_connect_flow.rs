@@ -392,3 +392,55 @@ outbound = "reject"
 
     let _ = std::fs::remove_file(config_path);
 }
+
+#[tokio::test]
+async fn non_connect_method_returns_405() {
+    let config_path = unique_test_path("surrogate_kernel_405_test");
+    let config = r#"
+listen = "127.0.0.1:0"
+default_outbound = "direct"
+
+[[outbounds]]
+id = "direct"
+type = "direct"
+"#;
+    std::fs::write(&config_path, config).expect("write config fixture");
+
+    let document = load_and_validate(&config_path).expect("load config");
+    let normalized = normalize(&document);
+    let (observability, collector) = Observability::collector();
+    let kernel = Kernel::new(normalized, observability).expect("build kernel");
+    let running = kernel.spawn().await.expect("start kernel");
+
+    let mut client = TcpStream::connect(running.local_addr())
+        .await
+        .expect("connect to kernel");
+    client
+        .write_all(b"GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n")
+        .await
+        .expect("write GET request");
+
+    let response = read_until_headers_complete(&mut client).await;
+    let response = String::from_utf8(response).expect("response is utf-8");
+    assert!(
+        response.contains("405 Method Not Allowed"),
+        "expected 405 response, got: {response}"
+    );
+    assert!(
+        response.contains("Allow: CONNECT"),
+        "expected Allow header, got: {response}"
+    );
+
+    running.shutdown().await.expect("shutdown kernel");
+    wait_for_event(&collector, EventKind::Error).await;
+
+    let events = collector.events();
+    assert!(
+        events
+            .iter()
+            .any(|e| e.kind == EventKind::Error && e.message.contains("CONNECT")),
+        "expected error event about CONNECT, got: {events:?}"
+    );
+
+    let _ = std::fs::remove_file(config_path);
+}

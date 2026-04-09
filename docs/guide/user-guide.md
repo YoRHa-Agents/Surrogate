@@ -128,7 +128,7 @@ surrogate-app dump-normalized config.toml
 
 Useful for debugging rule priority assignment and verifying normalization behavior.
 
-### `serve <path>`
+### `serve [--web-ui] <path>`
 
 Start the proxy kernel. The proxy listens for both HTTP CONNECT and SOCKS5 connections on the configured address. Protocol detection is automatic based on the first byte of each connection.
 
@@ -137,6 +137,12 @@ surrogate-app serve config.toml
 ```
 
 The proxy emits JSON-formatted observability events to stdout.
+
+Optional **`--web-ui`**: when passed, Surrogate starts the embedded HTTP dashboard on `127.0.0.1:41081` and, on macOS, opens it in the default browser. Without this flag, no dashboard is started and the browser is not opened.
+
+```bash
+surrogate-app serve --web-ui config.toml
+```
 
 ---
 

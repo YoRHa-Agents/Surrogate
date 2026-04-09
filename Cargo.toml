@@ -5,6 +5,7 @@ members = [
     "crates/surrogate-control",
     "crates/surrogate-bridge",
     "crates/surrogate-app",
+    "crates/surrogate-macos",
 ]
 resolver = "2"
 
