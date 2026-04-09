@@ -156,6 +156,42 @@ impl AppController {
         }
     }
 
+    pub fn config_document(&self) -> Option<surrogate_contract::config::ConfigDocument> {
+        let content = self.get_config_content().ok()?;
+        toml::from_str(&content).ok()
+    }
+
+    pub fn outbounds(&self) -> Vec<surrogate_contract::config::OutboundConfig> {
+        self.config_document()
+            .map(|d| d.outbounds)
+            .unwrap_or_default()
+    }
+
+    pub fn rules(&self) -> Vec<surrogate_contract::config::RouteRuleConfig> {
+        self.config_document()
+            .map(|d| d.rules)
+            .unwrap_or_default()
+    }
+
+    pub fn default_outbound_id(&self) -> String {
+        self.config_document()
+            .map(|d| d.default_outbound)
+            .unwrap_or_else(|| "direct".to_string())
+    }
+
+    pub fn event_counts(&self) -> (usize, usize, usize) {
+        let events = self.recent_events();
+        let sessions = events
+            .iter()
+            .filter(|e| e.kind == surrogate_contract::events::EventKind::SessionStarted)
+            .count();
+        let errors = events
+            .iter()
+            .filter(|e| e.kind == surrogate_contract::events::EventKind::Error)
+            .count();
+        (events.len(), sessions, errors)
+    }
+
     fn ensure_event_forwarder(&self) {
         let mut started = self
             .inner

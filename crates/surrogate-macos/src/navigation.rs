@@ -136,4 +136,27 @@ impl NavigationState {
             .filter(|g| g.visible_in(mode))
             .collect()
     }
+
+    pub fn all_pages_for_mode(mode: UiMode) -> Vec<Page> {
+        TaskGroup::all()
+            .iter()
+            .filter(|g| g.visible_in(mode))
+            .flat_map(|g| g.pages().iter().copied())
+            .collect()
+    }
+}
+
+impl Page {
+    pub fn group(self) -> TaskGroup {
+        match self {
+            Page::Overview | Page::AbilityLens => TaskGroup::Home,
+            Page::Apps | Page::Tools => TaskGroup::Workflows,
+            Page::Profiles | Page::Rules => TaskGroup::Network,
+            Page::Test | Page::Observe => TaskGroup::Diagnose,
+            Page::Settings => TaskGroup::System,
+            Page::Components | Page::Plugins | Page::ImportLab | Page::EgressLab => {
+                TaskGroup::Advanced
+            }
+        }
+    }
 }
