@@ -1165,7 +1165,7 @@ dependencies = [
 
 [[package]]
 name = "surrogate-app"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "serde",
@@ -1178,7 +1178,7 @@ dependencies = [
 
 [[package]]
 name = "surrogate-bridge"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "surrogate-contract",
  "tokio",
@@ -1186,7 +1186,7 @@ dependencies = [
 
 [[package]]
 name = "surrogate-contract"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -1197,7 +1197,7 @@ dependencies = [
 
 [[package]]
 name = "surrogate-control"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -1207,7 +1207,7 @@ dependencies = [
 
 [[package]]
 name = "surrogate-kernel"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "surrogate-contract",
  "thiserror 2.0.18",
@@ -1216,7 +1216,7 @@ dependencies = [
 
 [[package]]
 name = "surrogate-macos"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "cocoanut",

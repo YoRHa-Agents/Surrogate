@@ -188,6 +188,199 @@ fn test_page_group_mapping() {
 }
 
 #[test]
+fn test_snapshot_initial_state() {
+    let path = unique_config_path("snapshot");
+    write_test_config(&path);
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let controller = AppController::new(path.clone(), rt);
+
+    let snap = controller.snapshot();
+    assert!(!snap.running);
+    assert!(snap.listen_addr.is_none());
+    assert!(snap.uptime_secs.is_none());
+    assert_eq!(snap.mode, UiMode::Simple);
+    assert_eq!(snap.session_count, 0);
+    assert_eq!(snap.error_count, 0);
+    assert_eq!(snap.default_outbound, "direct");
+    assert!(!snap.config_path.is_empty());
+
+    std::fs::remove_file(&path).expect("remove temp config");
+}
+
+#[test]
+fn test_snapshot_after_mode_change() {
+    let path = unique_config_path("snapmode");
+    write_test_config(&path);
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let controller = AppController::new(path.clone(), rt);
+
+    controller.set_ui_mode(UiMode::Expert);
+    let snap = controller.snapshot();
+    assert_eq!(snap.mode, UiMode::Expert);
+
+    std::fs::remove_file(&path).expect("remove temp config");
+}
+
+#[test]
+fn test_navigation_select_group() {
+    let mut nav = NavigationState::default();
+    assert_eq!(nav.active_group, TaskGroup::Home);
+    assert_eq!(nav.active_page, Page::Overview);
+
+    nav.select_group(TaskGroup::Workflows);
+    assert_eq!(nav.active_group, TaskGroup::Workflows);
+    assert_eq!(nav.active_page, Page::Apps);
+
+    nav.select_group(TaskGroup::Diagnose);
+    assert_eq!(nav.active_group, TaskGroup::Diagnose);
+    assert_eq!(nav.active_page, Page::Test);
+}
+
+#[test]
+fn test_navigation_select_page() {
+    let mut nav = NavigationState::default();
+    nav.select_page(Page::AbilityLens);
+    assert_eq!(nav.active_page, Page::AbilityLens);
+}
+
+#[test]
+fn test_page_labels() {
+    assert_eq!(Page::Overview.label(), "Overview");
+    assert_eq!(Page::AbilityLens.label(), "Ability Lens");
+    assert_eq!(Page::Apps.label(), "Apps");
+    assert_eq!(Page::Tools.label(), "Tools");
+    assert_eq!(Page::Profiles.label(), "Profiles");
+    assert_eq!(Page::Rules.label(), "Rules");
+    assert_eq!(Page::Test.label(), "Test");
+    assert_eq!(Page::Observe.label(), "Observe");
+    assert_eq!(Page::Settings.label(), "Settings");
+    assert_eq!(Page::Components.label(), "Components");
+    assert_eq!(Page::Plugins.label(), "Plugins");
+    assert_eq!(Page::ImportLab.label(), "Import Lab");
+    assert_eq!(Page::EgressLab.label(), "Egress Lab");
+}
+
+#[test]
+fn test_group_labels() {
+    assert_eq!(TaskGroup::Home.label(), "Home");
+    assert_eq!(TaskGroup::Workflows.label(), "Workflows");
+    assert_eq!(TaskGroup::Network.label(), "Network");
+    assert_eq!(TaskGroup::Diagnose.label(), "Diagnose");
+    assert_eq!(TaskGroup::System.label(), "System");
+    assert_eq!(TaskGroup::Advanced.label(), "Advanced");
+}
+
+#[test]
+fn test_group_visibility_boundaries() {
+    assert!(TaskGroup::Home.visible_in(UiMode::Simple));
+    assert!(TaskGroup::Home.visible_in(UiMode::Expert));
+    assert!(!TaskGroup::Network.visible_in(UiMode::Simple));
+    assert!(TaskGroup::Network.visible_in(UiMode::Advanced));
+    assert!(!TaskGroup::Advanced.visible_in(UiMode::Simple));
+    assert!(!TaskGroup::Advanced.visible_in(UiMode::Advanced));
+    assert!(TaskGroup::Advanced.visible_in(UiMode::Expert));
+}
+
+#[test]
+fn test_theme_hex_conversion_palette() {
+    use surrogate_macos_lib::theme;
+    let bg = theme::hex_to_rgba("#2a2722");
+    assert!((bg.0 - theme::BG_PRIMARY.0).abs() < 0.01);
+    assert!((bg.1 - theme::BG_PRIMARY.1).abs() < 0.01);
+    assert!((bg.2 - theme::BG_PRIMARY.2).abs() < 0.01);
+}
+
+#[test]
+fn test_theme_font_constants() {
+    use surrogate_macos_lib::theme;
+    assert!(theme::TITLE_LG > theme::TITLE_MD);
+    assert!(theme::TITLE_MD > theme::TITLE_SM);
+    assert!(theme::MICRO > 0.0);
+    assert_eq!(theme::FONT_PRIMARY, "Hiragino Sans");
+}
+
+#[test]
+fn test_export_command_format() {
+    let path = unique_config_path("export");
+    write_test_config(&path);
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let controller = AppController::new(path.clone(), rt);
+
+    let _ = controller.start_proxy().expect("start");
+    let cmd = controller.export_command().expect("export should produce command when running");
+    assert!(cmd.contains("https_proxy="));
+    assert!(cmd.contains("http_proxy="));
+    assert!(cmd.contains("all_proxy="));
+    controller.stop_proxy().expect("stop");
+
+    std::fs::remove_file(&path).expect("remove temp config");
+}
+
+#[test]
+fn test_config_roundtrip() {
+    let path = unique_config_path("roundtrip");
+    write_test_config(&path);
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let controller = AppController::new(path.clone(), rt);
+
+    let content = controller.get_config_content().expect("read config");
+    controller.save_config_content(&content).expect("save same config");
+    let content2 = controller.get_config_content().expect("read config again");
+    assert_eq!(content, content2);
+
+    std::fs::remove_file(&path).expect("remove temp config");
+}
+
+#[test]
+fn test_snapshot_config_path_populated() {
+    let path = unique_config_path("snapsum");
+    write_test_config(&path);
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let controller = AppController::new(path.clone(), rt);
+
+    let snap = controller.snapshot();
+    assert!(!snap.config_path.is_empty());
+    assert_eq!(snap.default_outbound, "direct");
+
+    std::fs::remove_file(&path).expect("remove temp config");
+}
+
+#[test]
+fn test_observe_needs_advanced() {
+    assert!(Page::Observe.observe_needs_advanced());
+    assert!(!Page::Overview.observe_needs_advanced());
+    assert!(!Page::Test.observe_needs_advanced());
+}
+
+#[test]
+fn test_all_groups_list() {
+    let all = TaskGroup::all();
+    assert_eq!(all.len(), 6);
+    assert_eq!(all[0], TaskGroup::Home);
+    assert_eq!(all[5], TaskGroup::Advanced);
+}
+
+#[test]
+fn test_advanced_pages_for_expert() {
+    let expert_pages = NavigationState::all_pages_for_mode(UiMode::Expert);
+    assert!(expert_pages.contains(&Page::Components));
+    assert!(expert_pages.contains(&Page::Plugins));
+    assert!(expert_pages.contains(&Page::ImportLab));
+    assert!(expert_pages.contains(&Page::EgressLab));
+}
+
+#[test]
+fn test_simple_excludes_network_advanced() {
+    let simple_pages = NavigationState::all_pages_for_mode(UiMode::Simple);
+    assert!(!simple_pages.contains(&Page::Profiles));
+    assert!(!simple_pages.contains(&Page::Rules));
+    assert!(!simple_pages.contains(&Page::Components));
+    assert!(!simple_pages.contains(&Page::Plugins));
+    assert!(!simple_pages.contains(&Page::ImportLab));
+    assert!(!simple_pages.contains(&Page::EgressLab));
+}
+
+#[test]
 fn test_dispatcher_config_access() {
     let path = unique_config_path("cfgaccess");
     write_test_config(&path);

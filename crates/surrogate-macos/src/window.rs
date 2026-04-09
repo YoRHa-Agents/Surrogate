@@ -1,141 +1,215 @@
-use crate::dispatcher::{AppController, UiMode};
+use crate::dispatcher::{view_tags, AppController, UiMode};
 use crate::navigation::{NavigationState, Page, TaskGroup};
+use crate::theme;
 use cocoanut::prelude::*;
 
 pub fn run_app(controller: AppController) {
-    let mode = controller.ui_mode();
+    let snap = controller.snapshot();
     let nav = NavigationState::default();
 
-    let status_bar = build_status_bar(&controller);
-    let sidebar = build_sidebar(&controller, &nav);
-    let content = build_content_area(&controller, mode);
+    let status_bar = build_status_bar(&snap);
+    let sidebar = build_sidebar(&controller, &nav, snap.mode);
+    let content = build_content_area(&controller, &nav, snap.mode);
+    let inspector = build_inspector(&nav);
 
-    let right_pane = View::vstack()
+    let center_pane = View::vstack()
         .child(status_bar)
-        .child(View::spacer().height(2.0))
+        .child(theme::yorha_divider())
         .child(content);
 
     let main_layout = View::split_view()
         .child(sidebar)
-        .child(right_pane);
+        .child(center_pane)
+        .child(inspector);
 
     app("Surrogate")
         .size(1200.0, 800.0)
+        .on_close_fn(|| {
+            // Hide-on-close: the tray keeps the process alive.
+            // cocoanut's default on_close does not terminate;
+            // the tray quit handler calls cleanup_and_exit + process::exit.
+        })
         .build()
         .root(main_layout)
         .run()
         .expect("failed to run macOS application");
 }
 
-fn build_status_bar(controller: &AppController) -> View {
-    let status = controller.status();
-    let sys_proxy = controller.is_system_proxy_enabled();
-    let mode = controller.ui_mode();
-
-    let proxy_indicator = if status.running {
+fn build_status_bar(snap: &crate::dispatcher::UiState) -> View {
+    let proxy_indicator = if snap.running {
         format!(
-            "● Proxy: {}",
-            status.listen_addr.as_deref().unwrap_or("Running")
+            "● PROXY: {}",
+            snap.listen_addr.as_deref().unwrap_or("Running")
         )
     } else {
-        "○ Proxy: Stopped".to_string()
+        "○ PROXY: STOPPED".to_string()
     };
 
-    let sys_proxy_text = if sys_proxy {
-        "System Proxy: On"
+    let sys_proxy_text = if snap.system_proxy {
+        "SYSTEM PROXY: ON"
     } else {
-        "System Proxy: Off"
+        "SYSTEM PROXY: OFF"
     };
 
-    let uptime_text = status
+    let uptime_text = snap
         .uptime_secs
-        .map(|s| format!("Up: {}", format_uptime(s)))
-        .unwrap_or_default();
+        .map(|s| format!("UP: {}", format_uptime(s)))
+        .unwrap_or_else(|| "UP: —".to_string());
+
+    let error_display = if snap.error_count > 0 {
+        format!("ERRORS: {}", snap.error_count)
+    } else {
+        "ERRORS: 0".to_string()
+    };
 
     View::hstack()
-        .child(View::text(&proxy_indicator).font_size(12.0).bold())
-        .child(View::spacer().width(16.0))
-        .child(View::text(sys_proxy_text).font_size(11.0))
-        .child(View::spacer().width(16.0))
-        .child(View::text(&format!("Mode: {:?}", mode)).font_size(11.0))
-        .child(View::spacer().width(16.0))
-        .child(View::text(&uptime_text).font_size(11.0))
+        .child(
+            View::text(&proxy_indicator)
+                .font_size(theme::MICRO)
+                .bold()
+                .tag(view_tags::STATUS_PROXY),
+        )
+        .child(View::spacer().width(20.0))
+        .child(
+            View::text(sys_proxy_text)
+                .font_size(theme::MICRO)
+                .tag(view_tags::STATUS_SYS_PROXY),
+        )
+        .child(View::spacer().width(20.0))
+        .child(
+            View::text(&format!("MODE: {:?}", snap.mode).to_uppercase())
+                .font_size(theme::MICRO)
+                .tag(view_tags::STATUS_MODE),
+        )
         .child(View::spacer())
         .child(
-            View::text(&format!("Events: {}", status.total_events)).font_size(11.0),
+            View::text(&uptime_text)
+                .font_size(theme::MICRO)
+                .tag(view_tags::STATUS_UPTIME),
         )
-        .padding(8.0)
-        .background("windowBackgroundColor")
+        .child(View::spacer().width(16.0))
+        .child(
+            View::text(&format!("EVENTS: {}", snap.total_events))
+                .font_size(theme::MICRO)
+                .tag(view_tags::STATUS_EVENTS),
+        )
+        .child(View::spacer().width(16.0))
+        .child(
+            View::text(&error_display)
+                .font_size(theme::MICRO)
+                .tag(view_tags::STATUS_ERRORS),
+        )
+        .padding(6.0)
 }
 
-fn build_sidebar(controller: &AppController, nav: &NavigationState) -> View {
-    let mode = controller.ui_mode();
+fn build_sidebar(controller: &AppController, nav: &NavigationState, mode: UiMode) -> View {
     let groups = nav.visible_groups(mode);
-    let sys_proxy = controller.is_system_proxy_enabled();
 
     let mut sidebar = View::vstack()
-        .child(View::text("Surrogate").bold().font_size(18.0))
+        .child(
+            View::text("SURROGATE")
+                .bold()
+                .font_size(theme::TITLE_MD),
+        )
         .child(
             View::text(&format!("v{}", env!("CARGO_PKG_VERSION")))
-                .font_size(10.0)
-                .foreground("secondaryLabelColor"),
+                .font_size(theme::CAPTION),
         )
         .child(View::spacer().height(20.0))
-        .child(View::text("NAVIGATION").font_size(9.0).bold().foreground("tertiaryLabelColor"));
+        .child(theme::yorha_section_header("NAVIGATION"));
 
     for group in &groups {
         let is_active = *group == nav.active_group;
-        let label = if is_active {
-            format!("▸ {}", group.label())
-        } else {
-            format!("  {}", group.label())
-        };
+        let label = group.label().to_uppercase();
 
-        let page_count = group.pages().len();
-        let sublabel = if page_count > 1 {
-            let names: Vec<&str> = group.pages().iter().map(|p| p.label()).collect();
-            names.join(" · ")
+        let indicator = if is_active { "▌ " } else { "   " };
+        let display = format!("{indicator}{label}");
+
+        let pages = group.pages();
+        let sublabel = if pages.len() > 1 {
+            let names: Vec<&str> = pages.iter().map(|p| p.label()).collect();
+            format!("     {}", names.join(" · "))
         } else {
             String::new()
         };
 
-        let mut entry = View::vstack()
-            .child(View::text(&label).font_size(13.0));
+        let ctrl = controller.clone();
+        let grp = *group;
+        let mut entry = View::vstack().child(
+            View::button(&display)
+                .font_size(theme::TITLE_SM)
+                .on_click_fn(move || {
+                    let _ = &ctrl;
+                    let _ = grp;
+                    // Navigation state update will be handled by reactive rebuild
+                }),
+        );
         if !sublabel.is_empty() {
             entry = entry.child(
-                View::text(&format!("    {sublabel}"))
-                    .font_size(10.0)
-                    .foreground("secondaryLabelColor"),
+                View::text(&sublabel)
+                    .font_size(theme::CAPTION),
             );
         }
         sidebar = sidebar.child(entry);
-        sidebar = sidebar.child(View::spacer().height(4.0));
+        sidebar = sidebar.child(View::spacer().height(2.0));
     }
 
     sidebar = sidebar
         .child(View::spacer())
-        .child(View::spacer().height(12.0))
-        .child(View::text("STATUS").font_size(9.0).bold().foreground("tertiaryLabelColor"))
-        .child(View::spacer().height(4.0));
+        .child(theme::yorha_section_header("STATUS"));
 
     let running = controller.is_running();
-    let status_text = if running { "● Running" } else { "○ Stopped" };
-    sidebar = sidebar.child(View::text(status_text).font_size(11.0));
+    let status_text = if running {
+        "● RUNNING"
+    } else {
+        "○ STOPPED"
+    };
+    sidebar = sidebar.child(View::text(status_text).font_size(theme::BODY));
 
-    let sp_text = if sys_proxy { "◉ System Proxy" } else { "○ System Proxy" };
-    sidebar = sidebar.child(View::text(sp_text).font_size(11.0));
+    let sp = controller.is_system_proxy_enabled();
+    let sp_text = if sp {
+        "◉ SYSTEM PROXY"
+    } else {
+        "○ SYSTEM PROXY"
+    };
+    sidebar = sidebar.child(View::text(sp_text).font_size(theme::BODY));
 
-    sidebar = sidebar.child(View::text(&format!("Mode: {:?}", mode)).font_size(11.0));
+    sidebar = sidebar.child(
+        View::text(&format!("MODE: {:?}", controller.ui_mode()).to_uppercase())
+            .font_size(theme::BODY),
+    );
+
+    sidebar = sidebar
+        .child(View::spacer().height(12.0))
+        .child(
+            View::text(&format!("v{}", env!("CARGO_PKG_VERSION")))
+                .font_size(theme::MICRO),
+        );
 
     sidebar.width(200.0).padding(12.0)
 }
 
-fn build_content_area(controller: &AppController, mode: UiMode) -> View {
-    let pages = NavigationState::all_pages_for_mode(mode);
-    let tab_labels: Vec<String> = pages.iter().map(|p| p.label().to_string()).collect();
-    let mut tabs = View::tab_view(tab_labels);
+fn build_content_area(controller: &AppController, nav: &NavigationState, mode: UiMode) -> View {
+    let active_group = nav.active_group;
+    let group_pages: Vec<Page> = active_group
+        .pages()
+        .iter()
+        .copied()
+        .filter(|p| {
+            if mode == UiMode::Simple && p.observe_needs_advanced() {
+                return false;
+            }
+            true
+        })
+        .collect();
 
-    for page in &pages {
+    let tab_labels: Vec<String> = group_pages
+        .iter()
+        .map(|p| p.label().to_uppercase())
+        .collect();
+
+    let mut tabs = View::tab_view(tab_labels);
+    for page in &group_pages {
         let page_view = View::scroll_view().child(
             build_page(controller, *page).padding(16.0),
         );
@@ -143,6 +217,79 @@ fn build_content_area(controller: &AppController, mode: UiMode) -> View {
     }
 
     tabs
+}
+
+fn build_inspector(nav: &NavigationState) -> View {
+    let page = nav.active_page;
+    let group = page.group();
+
+    let purpose = page_purpose(page);
+    let module_context = page_module_context(page);
+
+    View::vstack()
+        .child(theme::yorha_section_header("INSPECTOR"))
+        .child(View::spacer().height(8.0))
+        .child(
+            theme::yorha_group_box("PAGE INFO").child(
+                View::vstack()
+                    .child(
+                        View::text(&page.label().to_uppercase())
+                            .bold()
+                            .font_size(theme::TITLE_SM),
+                    )
+                    .child(View::spacer().height(4.0))
+                    .child(
+                        View::text(&format!("Group: {}", group.label().to_uppercase()))
+                            .font_size(theme::CAPTION),
+                    )
+                    .child(View::spacer().height(8.0))
+                    .child(View::text(purpose).font_size(theme::BODY)),
+            ),
+        )
+        .child(View::spacer().height(12.0))
+        .child(
+            theme::yorha_group_box("MODULE CONTEXT").child(
+                View::text(module_context).font_size(theme::BODY),
+            ),
+        )
+        .child(View::spacer())
+        .width(250.0)
+        .padding(12.0)
+}
+
+fn page_purpose(page: Page) -> &'static str {
+    match page {
+        Page::Overview => "Central dashboard showing proxy state, traffic summary, alerts, and capability overview.",
+        Page::AbilityLens => "Capability maturity projection across all proxy abilities.",
+        Page::Apps => "Application binding management — per-app proxy policies and rule matching.",
+        Page::Tools => "Agent/IDE tool templates with recommended proxy configurations.",
+        Page::Profiles => "Outbound profiles, subscriptions, and egress strategy management.",
+        Page::Rules => "Routing rule configuration, priority ordering, and conflict detection.",
+        Page::Test => "Five-dimension diagnostic workbench for proxy capabilities.",
+        Page::Observe => "Real-time event stream and session monitoring.",
+        Page::Settings => "Proxy configuration, UI mode, and system proxy control.",
+        Page::Components => "Architecture module status — BaseProxy, StreamingLayer, Protocols.",
+        Page::Plugins => "Plugin registry management — enable, disable, inspect capabilities.",
+        Page::ImportLab => "Configuration import from external proxy formats.",
+        Page::EgressLab => "Outbound quality testing — latency, packet loss, connectivity.",
+    }
+}
+
+fn page_module_context(page: Page) -> &'static str {
+    match page {
+        Page::Overview => "surrogate-app::ProxyManager, surrogate-control::AbilityLens",
+        Page::AbilityLens => "surrogate-control::ability_lens",
+        Page::Apps | Page::Rules => "surrogate-control::rule_compiler, surrogate-contract::config",
+        Page::Tools => "surrogate-control::plugin_registry, surrogate-control::builtin_plugins",
+        Page::Profiles => "surrogate-contract::config::OutboundConfig",
+        Page::Test => "surrogate-control::test_workbench",
+        Page::Observe => "surrogate-contract::events::Event",
+        Page::Settings => "surrogate-contract::config, surrogate-app::system_proxy",
+        Page::Components => "surrogate-kernel (BaseProxy, StreamingLayer)",
+        Page::Plugins => "surrogate-control::plugin_registry",
+        Page::ImportLab => "surrogate-control::import_engine",
+        Page::EgressLab => "surrogate-control::test_workbench",
+    }
 }
 
 fn build_page(controller: &AppController, page: Page) -> View {

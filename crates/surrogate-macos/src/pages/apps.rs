@@ -1,137 +1,161 @@
 use crate::dispatcher::AppController;
+use crate::theme;
 use cocoanut::prelude::*;
 
 pub fn build(controller: &AppController) -> View {
     let outbounds = controller.outbounds();
-    let default_ob = controller.default_outbound_id();
     let rules = controller.rules();
-    let (_, sessions, _) = controller.event_counts();
+    let default_ob = controller.default_outbound_id();
+    let snap = controller.snapshot();
 
-    let outbound_names: Vec<String> = outbounds.iter().map(|o| o.id.clone()).collect();
+    let outbound_ids: Vec<String> = outbounds.iter().map(|o| o.id.clone()).collect();
 
-    let app_rows = vec![
-        vec![
-            "Safari".to_string(),
-            "com.apple.Safari".to_string(),
-            "DIRECT".to_string(),
-            "active".to_string(),
-        ],
-        vec![
-            "Cursor".to_string(),
-            "com.todesktop.230313mzl4w4u92".to_string(),
-            outbound_names.first().cloned().unwrap_or_else(|| "direct".to_string()),
-            "active".to_string(),
-        ],
-        vec![
-            "Claude Code".to_string(),
-            "cli:claude".to_string(),
-            default_ob.clone(),
-            "idle".to_string(),
-        ],
-        vec![
-            "Terminal".to_string(),
-            "com.apple.Terminal".to_string(),
-            "DIRECT".to_string(),
-            "active".to_string(),
-        ],
-        vec![
-            "ChatGPT".to_string(),
-            "com.openai.chat".to_string(),
-            "REJECT".to_string(),
-            "blocked".to_string(),
-        ],
-    ];
-
-    let matched_rules: Vec<Vec<String>> = rules
+    let app_rows: Vec<Vec<String>> = rules
         .iter()
-        .take(5)
+        .filter(|r| r.host_equals.is_some() || r.host_suffix.is_some())
         .map(|r| {
-            let cond = r
+            let pattern = r
                 .host_equals
                 .as_deref()
                 .or(r.host_suffix.as_deref())
                 .unwrap_or("—");
-            vec![r.id.clone(), cond.to_string(), r.outbound.clone()]
+            let condition = if r.host_equals.is_some() {
+                "host_equals"
+            } else {
+                "host_suffix"
+            };
+            vec![
+                pattern.to_string(),
+                r.outbound.clone(),
+                format!("{} ({})", r.id, condition),
+                if r.outbound == "reject" {
+                    "BLOCKED".to_string()
+                } else {
+                    "ACTIVE".to_string()
+                },
+            ]
         })
         .collect();
 
+    let matched_rules: Vec<Vec<String>> = rules
+        .iter()
+        .map(|r| {
+            let cond = if let Some(h) = &r.host_equals {
+                h.clone()
+            } else if let Some(s) = &r.host_suffix {
+                s.clone()
+            } else if let Some(p) = r.port {
+                format!("port:{p}")
+            } else {
+                "—".to_string()
+            };
+            vec![r.id.clone(), cond, r.outbound.clone()]
+        })
+        .collect();
+
+    let mut filter_options = vec!["ALL".to_string()];
+    for id in &outbound_ids {
+        filter_options.push(id.to_uppercase());
+    }
+
     let mut page = View::vstack()
-        .child(View::text("Apps").bold().font_size(22.0))
+        .child(View::text("APPS").bold().font_size(theme::TITLE_LG))
         .child(
-            View::text("Application-level proxy routing and coverage analysis")
-                .font_size(12.0)
+            View::text("APPLICATION-LEVEL PROXY ROUTING AND COVERAGE ANALYSIS")
+                .font_size(theme::CAPTION)
                 .foreground("secondaryLabelColor"),
         )
         .child(View::spacer().height(16.0))
         .child(
             View::hstack()
-                .child(View::search_field("Filter applications…").width(300.0))
+                .child(View::search_field("FILTER APPLICATIONS…").width(300.0))
                 .child(View::spacer().width(12.0))
-                .child(View::dropdown(
-                    "Group",
-                    vec![
-                        "All".to_string(),
-                        "Active".to_string(),
-                        "Blocked".to_string(),
-                        "Idle".to_string(),
-                    ],
-                ))
+                .child(View::dropdown("OUTBOUND FILTER", filter_options))
                 .child(View::spacer()),
         )
         .child(View::spacer().height(12.0))
         .child(
-            View::group_box("Application Bindings").child(
+            theme::yorha_group_box("APPLICATION BINDINGS").child(
                 View::table_view(
                     vec![
-                        "Application".to_string(),
-                        "Bundle / CLI ID".to_string(),
-                        "Outbound".to_string(),
-                        "Status".to_string(),
+                        "APPLICATION".to_string(),
+                        "OUTBOUND".to_string(),
+                        "RULE".to_string(),
+                        "STATUS".to_string(),
                     ],
                     app_rows,
                 )
                 .height(200.0),
             ),
         )
-        .child(View::spacer().height(12.0))
-        .child(
-            View::group_box("AppGroup Management").child(
-                View::vstack()
-                    .child(
-                        View::hstack()
-                            .child(View::text("Default Group").bold().font_size(12.0))
-                            .child(View::spacer())
-                            .child(View::text(&format!("Default exit: {default_ob}")).font_size(11.0)),
-                    )
-                    .child(View::spacer().height(8.0))
-                    .child(
-                        View::text(&format!("Active sessions: {sessions}")).font_size(12.0),
-                    )
-                    .child(View::spacer().height(4.0))
-                    .child(
-                        View::text(&format!("Configured outbounds: {}", outbound_names.join(", ")))
-                            .font_size(11.0)
-                            .foreground("secondaryLabelColor"),
-                    ),
-            ),
-        );
+        .child(View::spacer().height(12.0));
 
     if !matched_rules.is_empty() {
-        page = page
-            .child(View::spacer().height(12.0))
-            .child(
-                View::group_box("Recently Matched Rules").child(
-                    View::table_view(
-                        vec![
-                            "Rule ID".to_string(),
-                            "Condition".to_string(),
-                            "Outbound".to_string(),
-                        ],
-                        matched_rules,
-                    ),
-                ),
-            );
+        page = page.child(
+            theme::yorha_group_box("MATCHED RULES").child(
+                View::table_view(
+                    vec![
+                        "ID".to_string(),
+                        "CONDITION".to_string(),
+                        "OUTBOUND".to_string(),
+                    ],
+                    matched_rules,
+                )
+                .height(160.0),
+            ),
+        );
+        page = page.child(View::spacer().height(12.0));
     }
+
+    page = page.child(
+        theme::yorha_group_box("TRAFFIC").child(
+            View::hstack()
+                .child(
+                    View::vstack()
+                        .child(
+                            View::text(&snap.session_count.to_string())
+                                .bold()
+                                .font_size(theme::TITLE_LG),
+                        )
+                        .child(View::text("SESSIONS").font_size(theme::CAPTION))
+                        .padding(8.0),
+                )
+                .child(View::spacer().width(24.0))
+                .child(
+                    View::vstack()
+                        .child(
+                            View::text(&snap.total_events.to_string())
+                                .bold()
+                                .font_size(theme::TITLE_LG),
+                        )
+                        .child(View::text("EVENTS").font_size(theme::CAPTION))
+                        .padding(8.0),
+                )
+                .child(View::spacer().width(24.0))
+                .child(
+                    View::vstack()
+                        .child(
+                            View::text(&snap.error_count.to_string())
+                                .bold()
+                                .font_size(theme::TITLE_LG),
+                        )
+                        .child(View::text("ERRORS").font_size(theme::CAPTION))
+                        .padding(8.0),
+                )
+                .child(View::spacer().width(24.0))
+                .child(
+                    View::vstack()
+                        .child(
+                            View::text(&default_ob.to_uppercase())
+                                .bold()
+                                .font_size(theme::TITLE_MD),
+                        )
+                        .child(View::text("DEFAULT EXIT").font_size(theme::CAPTION))
+                        .padding(8.0),
+                )
+                .child(View::spacer()),
+        ),
+    );
 
     page
 }

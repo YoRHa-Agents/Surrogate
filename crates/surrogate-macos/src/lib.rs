@@ -1,5 +1,6 @@
 pub mod dispatcher;
 pub mod navigation;
+pub mod theme;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod event_format;
 
