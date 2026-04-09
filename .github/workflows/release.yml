@@ -100,9 +100,22 @@ jobs:
         run: |
           chmod +x scripts/package-macos.sh
           ./scripts/package-macos.sh release --target aarch64-apple-darwin
-          if [ -d "Surrogate.app" ]; then
-            zip -r "Surrogate-macOS-aarch64.zip" "Surrogate.app"
+
+      - name: Validate .app bundle contains correct binary
+        shell: bash
+        run: |
+          BINARY="Surrogate.app/Contents/MacOS/Surrogate"
+          if [ ! -f "$BINARY" ]; then
+            echo "FATAL: $BINARY not found"
+            exit 1
           fi
+          # Verify the binary links against AppKit (surrogate-macos) not just libc (surrogate-app)
+          if ! otool -L "$BINARY" 2>/dev/null | grep -q "AppKit"; then
+            echo "FATAL: Binary does not link AppKit — likely surrogate-app, not surrogate-macos"
+            exit 1
+          fi
+          echo "OK: Binary links AppKit (confirmed surrogate-macos)"
+          zip -r "Surrogate-macOS-aarch64.zip" "Surrogate.app"
 
       - name: Upload CLI artifact
         uses: actions/upload-artifact@v4

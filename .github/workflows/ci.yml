@@ -24,6 +24,21 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
 
+  build-macos-app:
+    name: Build macOS native binary
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build surrogate-macos binary (verifies AppKit linking)
+        run: cargo build -p surrogate-macos
+      - name: Verify packaging script
+        run: |
+          chmod +x scripts/package-macos.sh
+          ./scripts/package-macos.sh debug --skip-build
+          test -d Surrogate.app/Contents/MacOS || { echo "FAIL: .app bundle not created"; exit 1; }
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest

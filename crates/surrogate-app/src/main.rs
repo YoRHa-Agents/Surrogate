@@ -257,22 +257,42 @@ async fn handle_dashboard_request(
 // .app bundle mismatch detection
 // ---------------------------------------------------------------------------
 
-fn warn_if_running_inside_app_bundle() {
-    if let Ok(exe) = std::env::current_exe() {
-        let exe_str = exe.to_string_lossy();
-        if exe_str.contains(".app/Contents/MacOS/") {
-            eprintln!("╔══════════════════════════════════════════════════════════════╗");
-            eprintln!("║  WARNING: surrogate-app (CLI) is running inside a .app      ║");
-            eprintln!("║  bundle. The macOS GUI app requires the surrogate-macos     ║");
-            eprintln!("║  binary instead. Rebuild the .app with:                     ║");
-            eprintln!("║                                                              ║");
-            eprintln!("║    cargo build -p surrogate-macos                            ║");
-            eprintln!("║    ./scripts/package-macos.sh                                ║");
-            eprintln!("║                                                              ║");
-            eprintln!("║  Continuing as CLI fallback (no native GUI)...               ║");
-            eprintln!("╚══════════════════════════════════════════════════════════════╝");
-        }
+fn is_inside_app_bundle() -> bool {
+    std::env::current_exe()
+        .map(|exe| exe.to_string_lossy().contains(".app/Contents/MacOS/"))
+        .unwrap_or(false)
+}
+
+fn block_if_running_inside_app_bundle() {
+    if !is_inside_app_bundle() {
+        return;
     }
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("osascript")
+            .args([
+                "-e",
+                concat!(
+                    "display dialog ",
+                    "\"This .app contains the wrong binary (surrogate-app).\\n\\n",
+                    "The macOS GUI requires surrogate-macos.\\n",
+                    "Rebuild with:\\n",
+                    "  cargo build -p surrogate-macos\\n",
+                    "  ./scripts/package-macos.sh\" ",
+                    "with title \"Surrogate — Wrong Binary\" ",
+                    "buttons {\"OK\"} default button \"OK\" with icon stop",
+                ),
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+
+    eprintln!("[surrogate] FATAL: surrogate-app running inside .app bundle.");
+    eprintln!("[surrogate] The macOS GUI requires the surrogate-macos binary.");
+    eprintln!("[surrogate] Rebuild: cargo build -p surrogate-macos && ./scripts/package-macos.sh");
+    std::process::exit(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -281,7 +301,7 @@ fn warn_if_running_inside_app_bundle() {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    warn_if_running_inside_app_bundle();
+    block_if_running_inside_app_bundle();
 
     let mut args = std::env::args().skip(1);
     let command = args.next().unwrap_or_default();
@@ -638,8 +658,11 @@ mod tests {
     }
 
     #[test]
-    fn warn_function_does_not_panic() {
-        warn_if_running_inside_app_bundle();
+    fn app_bundle_detection_works() {
+        assert!(
+            !is_inside_app_bundle(),
+            "test binary should not appear inside .app"
+        );
     }
 
     #[test]
