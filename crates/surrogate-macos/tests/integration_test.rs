@@ -153,3 +153,66 @@ fn test_config_save_validates() {
 
     std::fs::remove_file(&path).expect("remove temp config");
 }
+
+#[test]
+fn test_all_pages_for_mode() {
+    let simple_pages = NavigationState::all_pages_for_mode(UiMode::Simple);
+    assert_eq!(simple_pages.len(), 7);
+    assert_eq!(simple_pages[0], Page::Overview);
+    assert_eq!(simple_pages[1], Page::AbilityLens);
+    assert!(!simple_pages.contains(&Page::Profiles));
+    assert!(!simple_pages.contains(&Page::Components));
+
+    let expert_pages = NavigationState::all_pages_for_mode(UiMode::Expert);
+    assert_eq!(expert_pages.len(), 13);
+    assert!(expert_pages.contains(&Page::Profiles));
+    assert!(expert_pages.contains(&Page::Components));
+    assert!(expert_pages.contains(&Page::EgressLab));
+}
+
+#[test]
+fn test_page_group_mapping() {
+    assert_eq!(Page::Overview.group(), TaskGroup::Home);
+    assert_eq!(Page::AbilityLens.group(), TaskGroup::Home);
+    assert_eq!(Page::Apps.group(), TaskGroup::Workflows);
+    assert_eq!(Page::Tools.group(), TaskGroup::Workflows);
+    assert_eq!(Page::Profiles.group(), TaskGroup::Network);
+    assert_eq!(Page::Rules.group(), TaskGroup::Network);
+    assert_eq!(Page::Test.group(), TaskGroup::Diagnose);
+    assert_eq!(Page::Observe.group(), TaskGroup::Diagnose);
+    assert_eq!(Page::Settings.group(), TaskGroup::System);
+    assert_eq!(Page::Components.group(), TaskGroup::Advanced);
+    assert_eq!(Page::Plugins.group(), TaskGroup::Advanced);
+    assert_eq!(Page::ImportLab.group(), TaskGroup::Advanced);
+    assert_eq!(Page::EgressLab.group(), TaskGroup::Advanced);
+}
+
+#[test]
+fn test_dispatcher_config_access() {
+    let path = unique_config_path("cfgaccess");
+    write_test_config(&path);
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let controller = AppController::new(path.clone(), rt);
+
+    let doc = controller.config_document().expect("config_document should parse");
+    assert_eq!(doc.listen, "127.0.0.1:0");
+    assert_eq!(doc.default_outbound, "direct");
+    assert_eq!(doc.outbounds.len(), 2);
+
+    let outbounds = controller.outbounds();
+    assert_eq!(outbounds.len(), 2);
+    assert_eq!(outbounds[0].id, "direct");
+    assert_eq!(outbounds[1].id, "reject");
+
+    let rules = controller.rules();
+    assert!(rules.is_empty());
+
+    assert_eq!(controller.default_outbound_id(), "direct");
+
+    let (total, sessions, errors) = controller.event_counts();
+    assert_eq!(total, 0);
+    assert_eq!(sessions, 0);
+    assert_eq!(errors, 0);
+
+    std::fs::remove_file(&path).expect("remove temp config");
+}
