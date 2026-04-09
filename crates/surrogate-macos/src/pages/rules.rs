@@ -1,5 +1,8 @@
 use crate::dispatcher::AppController;
+use crate::theme::{yorha_group_box, BODY, CAPTION, TITLE_LG, TITLE_SM};
 use cocoanut::prelude::*;
+use surrogate_contract::rules::{CompiledRule, RulePredicate};
+use surrogate_control::rule_compiler::RuleCompiler;
 
 pub fn build(controller: &AppController) -> View {
     let rules = controller.rules();
@@ -9,143 +12,127 @@ pub fn build(controller: &AppController) -> View {
         .iter()
         .enumerate()
         .map(|(i, r)| {
-            let priority = format!("{}", (i + 1) * 10);
-            let condition = if let Some(h) = &r.host_equals {
-                format!("HOST = {h}")
-            } else if let Some(s) = &r.host_suffix {
-                format!("SUFFIX = {s}")
-            } else if let Some(p) = r.port {
-                format!("PORT = {p}")
-            } else {
-                "—".to_string()
-            };
+            let priority = format!("{}", i + 1);
+            let condition = format_condition(r);
             vec![priority, r.id.clone(), condition, r.outbound.clone()]
         })
         .collect();
 
     let has_rules = !rule_rows.is_empty();
 
+    let compiled_rules: Vec<CompiledRule> = rules
+        .iter()
+        .enumerate()
+        .map(|(i, r)| CompiledRule {
+            id: r.id.clone(),
+            priority: (i + 1) as u32,
+            predicate: build_predicate(r),
+            outbound: r.outbound.clone(),
+            enabled: true,
+        })
+        .collect();
+
+    let compilation = RuleCompiler::compile(compiled_rules, default_ob.clone());
+    let conflicts = &compilation.conflicts;
+
     let mut page = View::vstack()
-        .child(View::text("Rules").bold().font_size(22.0))
-        .child(
-            View::text("Routing rules determine how traffic reaches its exit point")
-                .font_size(12.0)
-                .foreground("secondaryLabelColor"),
-        )
+        .child(View::text("RULES").bold().font_size(TITLE_LG))
         .child(View::spacer().height(16.0));
 
     if has_rules {
         page = page.child(
-            View::group_box("Rule List (priority order)").child(
-                View::table_view(
-                    vec![
-                        "Priority".to_string(),
-                        "Rule ID".to_string(),
-                        "Condition".to_string(),
-                        "Outbound".to_string(),
-                    ],
-                    rule_rows,
-                ),
-            ),
+            yorha_group_box("ROUTING RULES").child(View::table_view(
+                vec![
+                    "PRIORITY".to_string(),
+                    "ID".to_string(),
+                    "CONDITION".to_string(),
+                    "OUTBOUND".to_string(),
+                ],
+                rule_rows,
+            )),
         );
     } else {
         page = page.child(
-            View::group_box("Rule List").child(
-                View::vstack()
-                    .child(
-                        View::text("No rules configured — all traffic uses the default outbound")
-                            .font_size(12.0),
-                    )
-                    .child(View::spacer().height(8.0))
-                    .child(
-                        View::text(
-                            "Add rules in config.toml to route specific hosts or ports",
-                        )
-                        .font_size(11.0)
-                        .foreground("secondaryLabelColor"),
-                    ),
+            yorha_group_box("ROUTING RULES").child(
+                View::text("No routing rules configured.").font_size(BODY),
             ),
         );
     }
 
+    page = page.child(View::spacer().height(12.0));
+
+    let conflict_count = conflicts.len();
+    let mut conflict_section = View::vstack().child(
+        View::text(&format!("Conflicts detected: {conflict_count}"))
+            .font_size(BODY)
+            .bold(),
+    );
+
+    if !conflicts.is_empty() {
+        conflict_section = conflict_section.child(View::spacer().height(4.0));
+        for c in conflicts {
+            conflict_section = conflict_section.child(
+                View::text(&format!(
+                    "WARNING: Conflict: {} vs {} (same priority)",
+                    c.rule_a_id, c.rule_b_id
+                ))
+                .font_size(CAPTION),
+            );
+        }
+    }
+
     page = page
+        .child(yorha_group_box("CONFLICT DETECTION").child(conflict_section))
         .child(View::spacer().height(12.0))
         .child(
-            View::group_box("Default Fallback").child(
+            yorha_group_box("DEFAULT ROUTE").child(
                 View::hstack()
-                    .child(View::text("MATCH  *  →").font_size(13.0))
+                    .child(
+                        View::text("Fallback destination:")
+                            .font_size(TITLE_SM)
+                            .bold(),
+                    )
                     .child(View::spacer().width(8.0))
-                    .child(View::text(&default_ob).bold().font_size(13.0))
+                    .child(View::text(&default_ob).font_size(TITLE_SM))
                     .child(View::spacer()),
-            ),
-        )
-        .child(View::spacer().height(12.0))
-        .child(
-            View::group_box("Conflict Analysis").child(
-                View::vstack()
-                    .child(
-                        View::text(&format!(
-                            "Total rules: {}",
-                            rules.len()
-                        ))
-                        .font_size(12.0),
-                    )
-                    .child(check_overlaps(&rules)),
-            ),
-        )
-        .child(View::spacer().height(12.0))
-        .child(
-            View::group_box("Add Rule").child(
-                View::vstack()
-                    .child(
-                        View::hstack()
-                            .child(View::text("Type:").font_size(12.0))
-                            .child(View::spacer().width(8.0))
-                            .child(View::segmented_control(vec![
-                                "Domain".to_string(),
-                                "Suffix".to_string(),
-                                "Port".to_string(),
-                            ]))
-                            .child(View::spacer()),
-                    )
-                    .child(View::spacer().height(8.0))
-                    .child(
-                        View::hstack()
-                            .child(View::text_field("Value (e.g. example.com)").width(300.0))
-                            .child(View::spacer().width(8.0))
-                            .child(View::button("Add Rule"))
-                            .child(View::spacer()),
-                    ),
             ),
         );
 
     page
 }
 
-fn check_overlaps(rules: &[surrogate_contract::config::RouteRuleConfig]) -> View {
-    let mut warnings = Vec::new();
-    for (i, a) in rules.iter().enumerate() {
-        for b in rules.iter().skip(i + 1) {
-            if let (Some(sa), Some(sb)) = (&a.host_suffix, &b.host_suffix) {
-                if sa.ends_with(sb) || sb.ends_with(sa) {
-                    warnings.push(format!(
-                        "Possible overlap: {} ({}) vs {} ({})",
-                        a.id, sa, b.id, sb
-                    ));
-                }
-            }
-        }
+fn format_condition(rule: &surrogate_contract::config::RouteRuleConfig) -> String {
+    let mut parts = Vec::new();
+    if let Some(h) = &rule.host_equals {
+        parts.push(format!("HOST = {h}"));
     }
-
-    if warnings.is_empty() {
-        View::text("No conflicts detected")
-            .font_size(11.0)
-            .foreground("secondaryLabelColor")
+    if let Some(s) = &rule.host_suffix {
+        parts.push(format!("SUFFIX = {s}"));
+    }
+    if let Some(p) = rule.port {
+        parts.push(format!("PORT = {p}"));
+    }
+    if parts.is_empty() {
+        "\u{2014}".to_string()
     } else {
-        let mut col = View::vstack();
-        for w in warnings {
-            col = col.child(View::text(&format!("⚠ {w}")).font_size(11.0));
-        }
-        col
+        parts.join(", ")
+    }
+}
+
+fn build_predicate(rule: &surrogate_contract::config::RouteRuleConfig) -> RulePredicate {
+    let mut predicates = Vec::new();
+    if let Some(h) = &rule.host_equals {
+        predicates.push(RulePredicate::HostEquals(h.clone()));
+    }
+    if let Some(s) = &rule.host_suffix {
+        predicates.push(RulePredicate::HostSuffix(s.clone()));
+    }
+    if let Some(p) = rule.port {
+        predicates.push(RulePredicate::PortEquals(p));
+    }
+    match predicates.len() {
+        0 => RulePredicate::HostEquals(String::new()),
+        1 => predicates.remove(0),
+        _ => RulePredicate::And(predicates),
     }
 }

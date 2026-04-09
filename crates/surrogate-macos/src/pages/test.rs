@@ -1,97 +1,163 @@
 use crate::dispatcher::AppController;
+use crate::theme::{yorha_button, yorha_group_box, BODY, CAPTION, TITLE_LG};
 use cocoanut::prelude::*;
 
 pub fn build(controller: &AppController) -> View {
-    let running = controller.is_running();
     let outbounds = controller.outbounds();
-    let exit_names: Vec<String> = outbounds.iter().map(|o| o.id.clone()).collect();
+    let mut exit_names: Vec<String> = vec!["default".to_string()];
+    for ob in &outbounds {
+        if ob.id != "default" {
+            exit_names.push(ob.id.clone());
+        }
+    }
 
     View::vstack()
-        .child(View::text("Test").bold().font_size(22.0))
+        .child(View::text("TEST").bold().font_size(TITLE_LG))
+        .child(View::spacer().height(4.0))
         .child(
             View::text("Five-dimension diagnostic workbench")
-                .font_size(12.0)
+                .font_size(CAPTION)
                 .foreground("secondaryLabelColor"),
         )
         .child(View::spacer().height(12.0))
         .child(
             View::hstack()
-                .child(View::text("Target exit:").font_size(12.0))
+                .child(View::text("TARGET OUTBOUND:").font_size(BODY).bold())
                 .child(View::spacer().width(8.0))
-                .child(View::dropdown("Select outbound", exit_names.clone()))
+                .child(View::dropdown("default", exit_names))
                 .child(View::spacer().width(16.0))
-                .child(if running {
-                    View::button("Run All Tests")
-                } else {
-                    View::text("Start proxy to enable tests")
-                        .font_size(12.0)
-                        .foreground("secondaryLabelColor")
-                })
+                .child(yorha_button("Run All Tests").on_click_fn(|| {
+                    std::thread::spawn(|| {
+                        eprintln!("[surrogate-test] RUN ALL TESTS triggered (placeholder)");
+                    });
+                }))
                 .child(View::spacer()),
         )
         .child(View::spacer().height(16.0))
-        .child(build_dimension(
-            "Identity",
+        .child(build_dimension_box(
+            "IDENTITY",
+            "Verify exit identity and detect information leaks",
             &[
-                ("IP / ASN Check", "Verify exit IP and autonomous system"),
-                ("DNS Resolution", "Check for DNS leaks via exit"),
-                ("WebRTC Leak", "Detect WebRTC IP exposure"),
+                (
+                    "DNS RESOLUTION",
+                    "Resolve domains through proxy to detect DNS leaks",
+                ),
+                (
+                    "IP LEAK TEST",
+                    "Confirm exit IP matches expected outbound address",
+                ),
             ],
         ))
         .child(View::spacer().height(8.0))
-        .child(build_dimension(
-            "Transport",
+        .child(build_dimension_box(
+            "TRANSPORT",
+            "Validate tunnel protocols and connection establishment",
             &[
-                ("TCP Reachability", "Connect to target hosts via proxy"),
-                ("TLS Handshake", "Verify TLS negotiation through tunnel"),
-                ("Latency", "Round-trip time measurement"),
-                ("Bandwidth", "Throughput estimation"),
+                (
+                    "TLS HANDSHAKE",
+                    "Verify TLS negotiation through the tunnel",
+                ),
+                (
+                    "HTTP CONNECT",
+                    "Test HTTP CONNECT proxy tunnel method",
+                ),
+                (
+                    "SOCKS5",
+                    "Validate SOCKS5 handshake and data relay",
+                ),
             ],
         ))
         .child(View::spacer().height(8.0))
-        .child(build_dimension(
-            "Streaming",
+        .child(build_dimension_box(
+            "STREAMING",
+            "Test multiplexed and bidirectional stream support",
             &[
-                ("HTTP/2", "Multiplexed stream test"),
-                ("WebSocket", "Bidirectional stream test"),
-                ("SSE", "Server-sent events passthrough"),
+                (
+                    "HTTP/2 SUPPORT",
+                    "Verify HTTP/2 multiplexed streams through proxy",
+                ),
+                (
+                    "WEBSOCKET UPGRADE",
+                    "Test WebSocket upgrade and bidirectional relay",
+                ),
             ],
         ))
         .child(View::spacer().height(8.0))
-        .child(build_dimension(
-            "Tool Compatibility",
+        .child(build_dimension_box(
+            "TOOL",
+            "Verify reachability of AI development tool endpoints",
             &[
-                ("Claude Code", "Anthropic API reachability"),
-                ("Cursor", "IDE backend connectivity"),
-                ("Copilot", "GitHub Copilot endpoint test"),
+                (
+                    "CLAUDE API ENDPOINT",
+                    "Test connectivity to Anthropic API",
+                ),
+                (
+                    "CURSOR BACKEND",
+                    "Verify Cursor IDE backend reachability",
+                ),
+                (
+                    "NPM REGISTRY",
+                    "Check npm registry access through proxy",
+                ),
             ],
         ))
         .child(View::spacer().height(8.0))
-        .child(build_dimension(
-            "Risk Assessment",
+        .child(build_dimension_box(
+            "RISK",
+            "Assess exit region policy and certificate trust",
             &[
-                ("Region Risk", "Exit region vs. service policy match"),
-                ("Egress Quality", "Packet loss, jitter, stability"),
-                ("Site Reachability", "Critical domain group check"),
+                (
+                    "REGION DETECTION",
+                    "Identify exit region and check service policy",
+                ),
+                (
+                    "CERTIFICATE VALIDATION",
+                    "Verify TLS certificate chain integrity",
+                ),
             ],
         ))
 }
 
-fn build_dimension(title: &str, checks: &[(&str, &str)]) -> View {
-    let mut items = View::vstack();
-    for (name, description) in checks {
-        items = items.child(
+fn build_dimension_box(title: &str, description: &str, checks: &[(&str, &str)]) -> View {
+    let dim_label = title.to_string();
+
+    let mut content = View::vstack()
+        .child(
             View::hstack()
-                .child(View::text("○").font_size(11.0).width(16.0))
-                .child(View::text(*name).font_size(12.0).bold().width(180.0))
                 .child(
-                    View::text(*description)
-                        .font_size(11.0)
+                    View::text(description)
+                        .font_size(CAPTION)
                         .foreground("secondaryLabelColor"),
                 )
                 .child(View::spacer())
-                .child(View::button("Run").width(60.0)),
+                .child(yorha_button("Run").on_click_fn(move || {
+                    let name = dim_label.clone();
+                    std::thread::spawn(move || {
+                        eprintln!("[surrogate-test] RUN {name} triggered (placeholder)");
+                    });
+                })),
+        )
+        .child(View::spacer().height(4.0))
+        .child(
+            View::text("PENDING")
+                .font_size(CAPTION)
+                .foreground("secondaryLabelColor"),
+        )
+        .child(View::spacer().height(8.0));
+
+    for (name, desc) in checks {
+        content = content.child(
+            View::hstack()
+                .child(View::text("○").font_size(CAPTION).width(16.0))
+                .child(View::text(*name).font_size(BODY).bold().width(200.0))
+                .child(
+                    View::text(*desc)
+                        .font_size(CAPTION)
+                        .foreground("secondaryLabelColor"),
+                )
+                .child(View::spacer()),
         );
     }
-    View::group_box(title).child(items)
+
+    yorha_group_box(title).child(content)
 }

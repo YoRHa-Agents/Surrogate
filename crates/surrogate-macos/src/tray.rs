@@ -62,11 +62,44 @@ fn build_tray_menu(controller: &AppController) -> Menu {
     };
 
     let status_item = MenuItem::with_id("status", &status_text, false, None);
+    let _ = menu.append(&status_item);
+
+    let default_ob = controller.default_outbound_id();
+    let default_item = MenuItem::with_id(
+        "default_outbound",
+        &format!("Default: {default_ob}"),
+        false,
+        None,
+    );
+    let _ = menu.append(&default_item);
+
+    let (_, _, error_count) = controller.event_counts();
+    if error_count > 0 {
+        let err_item = MenuItem::with_id(
+            "error_count",
+            &format!("Errors: {error_count}"),
+            false,
+            None,
+        );
+        let _ = menu.append(&err_item);
+    }
+
+    let _ = menu.append(&PredefinedMenuItem::separator());
+
     let toggle_text = if running { "Stop Proxy" } else { "Start Proxy" };
     let toggle = MenuItem::with_id("toggle_proxy", toggle_text, true, None);
     let sys_proxy = MenuItem::with_id("toggle_sys_proxy", "Toggle System Proxy", true, None);
+    let _ = menu.append(&toggle);
+    let _ = menu.append(&sys_proxy);
+
+    let _ = menu.append(&PredefinedMenuItem::separator());
+
     let open_window = MenuItem::with_id("open_window", "Open Main Window", true, None);
     let copy_export = MenuItem::with_id("copy_export", "Copy Export Command", true, None);
+    let _ = menu.append(&open_window);
+    let _ = menu.append(&copy_export);
+
+    let _ = menu.append(&PredefinedMenuItem::separator());
 
     let mode_simple = MenuItem::with_id("mode_simple", "Simple", true, None);
     let mode_advanced = MenuItem::with_id("mode_advanced", "Advanced", true, None);
@@ -75,19 +108,18 @@ fn build_tray_menu(controller: &AppController) -> Menu {
     let _ = mode_submenu.append(&mode_simple);
     let _ = mode_submenu.append(&mode_advanced);
     let _ = mode_submenu.append(&mode_expert);
+    let _ = menu.append(&mode_submenu);
+
+    let _ = menu.append(&PredefinedMenuItem::separator());
+
+    let quick_test = MenuItem::with_id("quick_test_panel", "Quick: Test Panel", true, None);
+    let quick_observe = MenuItem::with_id("quick_observe", "Quick: Observe", true, None);
+    let _ = menu.append(&quick_test);
+    let _ = menu.append(&quick_observe);
+
+    let _ = menu.append(&PredefinedMenuItem::separator());
 
     let quit = MenuItem::with_id("quit", "Quit Surrogate", true, None);
-
-    let _ = menu.append(&status_item);
-    let _ = menu.append(&PredefinedMenuItem::separator());
-    let _ = menu.append(&toggle);
-    let _ = menu.append(&sys_proxy);
-    let _ = menu.append(&PredefinedMenuItem::separator());
-    let _ = menu.append(&open_window);
-    let _ = menu.append(&copy_export);
-    let _ = menu.append(&PredefinedMenuItem::separator());
-    let _ = menu.append(&mode_submenu);
-    let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&quit);
 
     menu
@@ -130,6 +162,12 @@ fn handle_menu_event(event: &MenuEvent, controller: &AppController) {
         }
         "open_window" => {
             activate_app_window();
+        }
+        "quick_test_panel" => {
+            eprintln!("[surrogate] tray: Quick Test Panel selected (placeholder — cannot switch window tab from tray)");
+        }
+        "quick_observe" => {
+            eprintln!("[surrogate] tray: Quick Observe selected (placeholder — cannot switch window tab from tray)");
         }
         unknown => {
             eprintln!("[surrogate] unhandled menu event: {unknown}");

@@ -1,144 +1,135 @@
 use crate::dispatcher::AppController;
+use crate::theme::{yorha_group_box, yorha_section_header, BODY, CAPTION, MICRO, TITLE_LG};
 use cocoanut::prelude::*;
 
 struct PluginSpec {
     name: &'static str,
-    capabilities: &'static str,
-    enabled: bool,
-    version: &'static str,
     description: &'static str,
+    capabilities: &'static [&'static str],
+    enabled: bool,
 }
 
 const BUILTIN_PLUGINS: &[PluginSpec] = &[
     PluginSpec {
         name: "core-bootstrap",
-        capabilities: "ProxyBootstrap, SystemProxy",
-        enabled: true,
-        version: "0.1.0",
         description: "Core proxy lifecycle and system proxy management",
+        capabilities: &["ProxyBootstrap", "SystemProxy"],
+        enabled: true,
     },
     PluginSpec {
         name: "diagnostics",
-        capabilities: "Diagnostic, HealthCheck",
-        enabled: true,
-        version: "0.1.0",
         description: "Built-in diagnostic test suite (Identity, Transport, Streaming)",
+        capabilities: &["Diagnostic", "HealthCheck"],
+        enabled: true,
     },
     PluginSpec {
         name: "region-risk",
-        capabilities: "RegionRisk, GeoCheck",
-        enabled: false,
-        version: "0.1.0",
         description: "Region policy compliance and geo-restriction detection",
+        capabilities: &["RegionRisk", "GeoCheck"],
+        enabled: true,
     },
     PluginSpec {
         name: "import-clash",
-        capabilities: "ConfigImport",
-        enabled: false,
-        version: "0.1.0",
         description: "Clash / Mihomo configuration import and conversion",
+        capabilities: &["ConfigImport"],
+        enabled: true,
     },
     PluginSpec {
-        name: "import-singbox",
-        capabilities: "ConfigImport",
-        enabled: false,
-        version: "0.1.0",
-        description: "sing-box configuration import and conversion",
+        name: "import-surge",
+        description: "Surge configuration import and conversion",
+        capabilities: &["ConfigImport"],
+        enabled: true,
     },
 ];
 
-pub fn build(_controller: &AppController) -> View {
-    let plugin_rows: Vec<Vec<String>> = BUILTIN_PLUGINS
-        .iter()
-        .map(|p| {
-            vec![
-                p.name.to_string(),
-                p.version.to_string(),
-                p.capabilities.to_string(),
-                if p.enabled { "● On" } else { "○ Off" }.to_string(),
-            ]
-        })
-        .collect();
+fn build_plugin_card(spec: &PluginSpec) -> View {
+    let badge = if spec.enabled { "[ENABLED]" } else { "[DISABLED]" };
+    let caps = spec.capabilities.join(", ");
 
-    let mut page = View::vstack()
-        .child(View::text("Plugins").bold().font_size(22.0))
-        .child(
-            View::text("Extension modules for protocol support, import, and diagnostics")
-                .font_size(12.0)
-                .foreground("secondaryLabelColor"),
-        )
-        .child(View::spacer().height(16.0))
-        .child(
-            View::group_box("Installed Plugins").child(
-                View::table_view(
-                    vec![
-                        "Plugin".to_string(),
-                        "Version".to_string(),
-                        "Capabilities".to_string(),
-                        "State".to_string(),
-                    ],
-                    plugin_rows,
-                ),
+    yorha_group_box(spec.name).child(
+        View::vstack()
+            .child(
+                View::hstack()
+                    .child(View::text(badge).font_size(BODY).bold())
+                    .child(View::spacer()),
+            )
+            .child(View::spacer().height(4.0))
+            .child(View::text(spec.description).font_size(BODY))
+            .child(View::spacer().height(4.0))
+            .child(
+                View::text(&format!("CAPABILITIES: {caps}"))
+                    .font_size(CAPTION),
             ),
+    )
+}
+
+pub fn build(_controller: &AppController) -> View {
+    let mut page = View::vstack()
+        .child(View::text("PLUGINS").bold().font_size(TITLE_LG))
+        .child(View::spacer().height(8.0))
+        .child(
+            View::text("Extension modules for protocol support, import, and diagnostics.")
+                .font_size(BODY),
         )
         .child(View::spacer().height(12.0));
 
     for spec in BUILTIN_PLUGINS {
-        page = page.child(build_plugin_detail(spec));
+        page = page.child(build_plugin_card(spec));
         page = page.child(View::spacer().height(8.0));
     }
 
-    page = page.child(View::spacer().height(12.0)).child(
-        View::group_box("Plugin Registry").child(
-            View::vstack()
-                .child(
-                    View::hstack()
-                        .child(View::search_field("Search available plugins…").width(300.0))
-                        .child(View::spacer().width(8.0))
-                        .child(View::button("Refresh"))
-                        .child(View::spacer()),
-                )
-                .child(View::spacer().height(6.0))
-                .child(
-                    View::text("Plugin system uses the PluginRegistry from ControlPlane")
-                        .font_size(10.0)
-                        .foreground("secondaryLabelColor"),
-                ),
-        ),
+    page = page.child(View::spacer().height(4.0));
+
+    let registry_rows: Vec<Vec<String>> = BUILTIN_PLUGINS
+        .iter()
+        .map(|p| {
+            vec![
+                p.name.to_string(),
+                if p.enabled { "ENABLED" } else { "DISABLED" }.to_string(),
+                p.capabilities.join(", "),
+            ]
+        })
+        .collect();
+
+    page = page.child(
+        yorha_group_box("PLUGIN REGISTRY").child(View::table_view(
+            vec![
+                "NAME".to_string(),
+                "STATUS".to_string(),
+                "CAPABILITIES".to_string(),
+            ],
+            registry_rows,
+        )),
     );
 
     page
 }
 
-fn build_plugin_detail(spec: &PluginSpec) -> View {
-    View::group_box(spec.name).child(
-        View::vstack()
-            .child(
-                View::hstack()
-                    .child(
-                        View::text(if spec.enabled { "● Enabled" } else { "○ Disabled" })
-                            .font_size(12.0)
-                            .bold(),
-                    )
-                    .child(View::spacer().width(12.0))
-                    .child(View::text(&format!("v{}", spec.version)).font_size(11.0))
-                    .child(View::spacer().width(12.0))
-                    .child(
-                        View::toggle(if spec.enabled {
-                            "Disable"
-                        } else {
-                            "Enable"
-                        }),
-                    )
-                    .child(View::spacer()),
-            )
-            .child(View::spacer().height(4.0))
-            .child(View::text(spec.description).font_size(11.0))
-            .child(View::spacer().height(2.0))
-            .child(
-                View::text(&format!("Capabilities: {}", spec.capabilities))
-                    .font_size(10.0)
-                    .foreground("secondaryLabelColor"),
-            ),
-    )
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builtin_plugins_count() {
+        assert_eq!(BUILTIN_PLUGINS.len(), 5);
+    }
+
+    #[test]
+    fn all_plugin_names_non_empty() {
+        for p in BUILTIN_PLUGINS {
+            assert!(!p.name.is_empty());
+            assert!(!p.description.is_empty());
+            assert!(!p.capabilities.is_empty());
+        }
+    }
+
+    #[test]
+    fn expected_plugin_names() {
+        let names: Vec<&str> = BUILTIN_PLUGINS.iter().map(|p| p.name).collect();
+        assert!(names.contains(&"core-bootstrap"));
+        assert!(names.contains(&"diagnostics"));
+        assert!(names.contains(&"region-risk"));
+        assert!(names.contains(&"import-clash"));
+        assert!(names.contains(&"import-surge"));
+    }
 }
