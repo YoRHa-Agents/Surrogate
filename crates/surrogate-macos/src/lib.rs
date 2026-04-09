@@ -1,3 +1,7 @@
+#[cfg(target_os = "macos")]
+#[macro_use]
+extern crate objc;
+
 pub mod dispatcher;
 pub mod navigation;
 pub mod theme;

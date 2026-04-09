@@ -55,6 +55,7 @@ pub fn hex_to_rgba(hex: &str) -> ThemeColor {
 }
 
 #[cfg(target_os = "macos")]
+#[allow(unexpected_cfgs)]
 mod platform {
     use super::ThemeColor;
     use objc::runtime::Object;
@@ -62,64 +63,72 @@ mod platform {
     /// # Safety
     /// `view` must be a valid, non-null pointer to an NSView or subclass.
     pub unsafe fn set_view_bg(view: *mut Object, color: ThemeColor) {
-        cocoanut::native::view_properties::set_background_color(
-            view, color.0, color.1, color.2, color.3,
-        );
+        unsafe {
+            cocoanut::native::view_properties::set_background_color(
+                view, color.0, color.1, color.2, color.3,
+            );
+        }
     }
 
     /// # Safety
     /// `view` must be a valid, non-null pointer to an NSTextField or similar control.
     pub unsafe fn set_text_color(view: *mut Object, color: ThemeColor) {
-        let ns_color: *mut Object = objc::msg_send![
-            objc::class!(NSColor),
-            colorWithSRGBRed: color.0
-            green: color.1
-            blue: color.2
-            alpha: color.3
-        ];
-        let _: () = objc::msg_send![view, setTextColor: ns_color];
+        unsafe {
+            let ns_color: *mut Object = msg_send![
+                class!(NSColor),
+                colorWithSRGBRed: color.0
+                green: color.1
+                blue: color.2
+                alpha: color.3
+            ];
+            let _: () = msg_send![view, setTextColor: ns_color];
+        }
     }
 
     /// # Safety
     /// `view` must be a valid, non-null pointer to an NSControl that responds to `setFont:`.
     pub unsafe fn set_font(view: *mut Object, name: &str, size: f64) {
         let c_name = std::ffi::CString::new(name).unwrap_or_default();
-        let ns_name: *mut Object = objc::msg_send![
-            objc::class!(NSString),
-            stringWithUTF8String: c_name.as_ptr()
-        ];
-        let font: *mut Object =
-            objc::msg_send![objc::class!(NSFont), fontWithName: ns_name size: size];
-        if !font.is_null() {
-            let _: () = objc::msg_send![view, setFont: font];
-        } else {
-            let fallback: *mut Object =
-                objc::msg_send![objc::class!(NSFont), systemFontOfSize: size];
-            let _: () = objc::msg_send![view, setFont: fallback];
+        unsafe {
+            let ns_name: *mut Object = msg_send![
+                class!(NSString),
+                stringWithUTF8String: c_name.as_ptr()
+            ];
+            let font: *mut Object =
+                msg_send![class!(NSFont), fontWithName: ns_name size: size];
+            if !font.is_null() {
+                let _: () = msg_send![view, setFont: font];
+            } else {
+                let fallback: *mut Object =
+                    msg_send![class!(NSFont), systemFontOfSize: size];
+                let _: () = msg_send![view, setFont: fallback];
+            }
         }
     }
 
     /// # Safety
     /// `window` must be a valid, non-null pointer to an NSWindow.
     pub unsafe fn apply_yorha_window(window: *mut Object) {
-        let bg_color: *mut Object = objc::msg_send![
-            objc::class!(NSColor),
-            colorWithSRGBRed: super::BG_DEEP.0
-            green: super::BG_DEEP.1
-            blue: super::BG_DEEP.2
-            alpha: super::BG_DEEP.3
-        ];
-        let _: () = objc::msg_send![window, setBackgroundColor: bg_color];
-
         let c_str = std::ffi::CString::new("NSAppearanceNameDarkAqua").unwrap_or_default();
-        let appearance_name: *mut Object = objc::msg_send![
-            objc::class!(NSString),
-            stringWithUTF8String: c_str.as_ptr()
-        ];
-        let appearance: *mut Object =
-            objc::msg_send![objc::class!(NSAppearance), appearanceNamed: appearance_name];
-        if !appearance.is_null() {
-            let _: () = objc::msg_send![window, setAppearance: appearance];
+        unsafe {
+            let bg_color: *mut Object = msg_send![
+                class!(NSColor),
+                colorWithSRGBRed: super::BG_DEEP.0
+                green: super::BG_DEEP.1
+                blue: super::BG_DEEP.2
+                alpha: super::BG_DEEP.3
+            ];
+            let _: () = msg_send![window, setBackgroundColor: bg_color];
+
+            let appearance_name: *mut Object = msg_send![
+                class!(NSString),
+                stringWithUTF8String: c_str.as_ptr()
+            ];
+            let appearance: *mut Object =
+                msg_send![class!(NSAppearance), appearanceNamed: appearance_name];
+            if !appearance.is_null() {
+                let _: () = msg_send![window, setAppearance: appearance];
+            }
         }
     }
 }

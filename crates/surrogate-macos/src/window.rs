@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 use crate::dispatcher::{view_tags, AppController, UiMode};
 use crate::navigation::{NavigationState, Page};
 use crate::theme;
@@ -5,8 +7,6 @@ use cocoanut::prelude::*;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// Stores the NSWindow pointer so the window can be re-shown after close.
-/// Uses AtomicUsize because raw pointers are not Sync.
 static MAIN_WINDOW_PTR: AtomicUsize = AtomicUsize::new(0);
 
 /// Called from a setup thread after the window is created.
@@ -15,14 +15,14 @@ pub fn configure_main_window() {
     std::thread::sleep(std::time::Duration::from_millis(300));
     unsafe {
         let ns_app: *mut objc::runtime::Object =
-            objc::msg_send![objc::class!(NSApplication), sharedApplication];
-        let windows: *mut objc::runtime::Object = objc::msg_send![ns_app, windows];
-        let count: usize = objc::msg_send![windows, count];
+            msg_send![class!(NSApplication), sharedApplication];
+        let windows: *mut objc::runtime::Object = msg_send![ns_app, windows];
+        let count: usize = msg_send![windows, count];
         if count > 0 {
             let win: *mut objc::runtime::Object =
-                objc::msg_send![windows, objectAtIndex: 0usize];
+                msg_send![windows, objectAtIndex: 0usize];
             if !win.is_null() {
-                let _: () = objc::msg_send![win, setReleasedWhenClosed: false];
+                let _: () = msg_send![win, setReleasedWhenClosed: false];
                 MAIN_WINDOW_PTR.store(win as usize, Ordering::Release);
             }
         }
@@ -49,13 +49,13 @@ pub fn show_main_window() {
 
     unsafe {
         let win = ptr as *mut objc::runtime::Object;
-        let _: () = objc::msg_send![
+        let _: () = msg_send![
             win,
             makeKeyAndOrderFront: std::ptr::null::<objc::runtime::Object>()
         ];
         let ns_app: *mut objc::runtime::Object =
-            objc::msg_send![objc::class!(NSApplication), sharedApplication];
-        let _: () = objc::msg_send![ns_app, activateIgnoringOtherApps: true];
+            msg_send![class!(NSApplication), sharedApplication];
+        let _: () = msg_send![ns_app, activateIgnoringOtherApps: true];
     }
 }
 
@@ -85,7 +85,7 @@ pub fn run_app(controller: AppController) {
             if ptr != 0 {
                 unsafe {
                     let win = ptr as *mut objc::runtime::Object;
-                    let _: () = objc::msg_send![
+                    let _: () = msg_send![
                         win,
                         orderOut: std::ptr::null::<objc::runtime::Object>()
                     ];
@@ -93,12 +93,12 @@ pub fn run_app(controller: AppController) {
             } else {
                 unsafe {
                     let ns_app: *mut objc::runtime::Object =
-                        objc::msg_send![objc::class!(NSApplication), sharedApplication];
-                    let win: *mut objc::runtime::Object = objc::msg_send![ns_app, keyWindow];
+                        msg_send![class!(NSApplication), sharedApplication];
+                    let win: *mut objc::runtime::Object = msg_send![ns_app, keyWindow];
                     if !win.is_null() {
-                        let _: () = objc::msg_send![win, setReleasedWhenClosed: false];
+                        let _: () = msg_send![win, setReleasedWhenClosed: false];
                         MAIN_WINDOW_PTR.store(win as usize, Ordering::Release);
-                        let _: () = objc::msg_send![
+                        let _: () = msg_send![
                             win,
                             orderOut: std::ptr::null::<objc::runtime::Object>()
                         ];
